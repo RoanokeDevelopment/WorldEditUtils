@@ -18,6 +18,7 @@ import me.lucko.fabric.api.permissions.v0.Permissions;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.command.CommandSource;
+import net.minecraft.command.argument.IdentifierArgumentType;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
@@ -31,7 +32,9 @@ import net.minecraft.util.Identifier;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import static net.minecraft.server.command.CommandManager.argument;
@@ -44,7 +47,8 @@ public class WEUCommands {
                     literal("schempaste")
                             .requires(Permissions.require("worleditutils.schempaste", 4))
                             .then(argument("schematic_name", StringArgumentType.string())
-                                    .then(argument("world", StringArgumentType.string())
+                                    .suggests(this::suggestSchematics)
+                                    .then(argument("world", IdentifierArgumentType.identifier())
                                             .suggests(this::suggestWorlds)
                                             .then(argument("x", DoubleArgumentType.doubleArg())
                                                     .then(argument("y", DoubleArgumentType.doubleArg())
@@ -60,6 +64,22 @@ public class WEUCommands {
                 .map(serverWorld -> serverWorld.getRegistryKey().getValue().toString()), builder);
     }
 
+    private CompletableFuture<Suggestions> suggestSchematics(CommandContext<ServerCommandSource> ctx, SuggestionsBuilder builder) {
+        Path schematicsPath = FabricLoader.getInstance().getConfigDir().resolve("worldedit/schematics/");
+
+        File directory = schematicsPath.toFile();
+        Stream<String> fileNamesStream = Stream.empty();
+        if (directory.exists() && directory.isDirectory()) {
+            fileNamesStream = Stream.of(directory.listFiles())
+                    .filter(File::isFile)
+                    .map(File::getName);
+        } else {
+            return CommandSource.suggestMatching(new String[]{"NOSCHEMS"}, builder);
+        }
+
+        return CommandSource.suggestMatching(fileNamesStream, builder);
+    }
+
     private int executeSchemPaste(CommandContext<ServerCommandSource> ctx) {
         File file = FabricLoader.getInstance().getConfigDir().resolve("worldedit/schematics/" + StringArgumentType.getString(ctx, "schematic_name")).toFile();
         if (!file.exists()) {
@@ -69,7 +89,7 @@ public class WEUCommands {
 
         ServerWorld world = ctx.getSource().getServer().getWorld(RegistryKey.of(
                 RegistryKeys.WORLD,
-                Identifier.tryParse(StringArgumentType.getString(ctx, "world"))
+                IdentifierArgumentType.getIdentifier(ctx, "world")
         ));
 
         if (world == null) {
