@@ -8,6 +8,6 @@ public class WorldEditUtils implements ModInitializer {
      */
     @Override
     public void onInitialize() {
-
+        new WEUCommands();
     }
 }
